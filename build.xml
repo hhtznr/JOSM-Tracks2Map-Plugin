@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="Tracks2Map" default="dist" basedir=".">
+    <!-- enter the SVN commit message -->
+    <property name="commit.message" value="[josm_tracks2map]"/>
+    <!-- enter the *lowest* JOSM version this plugin is currently compatible with -->
+    <property name="plugin.main.version" value="18619"/>
+
+    <!-- Configure these properties (replace "..." accordingly).
+         See https://josm.openstreetmap.de/wiki/DevelopersGuide/DevelopingPlugins
+    -->
+    <property name="plugin.version" value="0.0.1"/>
+    <property name="plugin.author" value="Harald Hetzner"/>
+    <property name="plugin.class" value="hhtznr.josm.plugins.tracks2map.Tracks2MapPlugin"/>
+    <property name="plugin.description" value="Opens all GPX tracks in the current map view from a specified directory. Can work recursively."/>
+    <property name="plugin.icon" value="images/tracks2map.png"/>
+    <property name="plugin.link" value="https://github.com/hhtznr/JOSM-Tracks2Map-Plugin"/>
+
+    <!-- ** include targets that all plugins have in common ** -->
+    <import file="../build-common.xml"/>
+</project>
