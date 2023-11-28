@@ -2,14 +2,25 @@ package hhtznr.josm.plugins.tracks2map.gui;
 
 import java.awt.event.ActionEvent;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.openstreetmap.josm.actions.JosmAction;
+import org.openstreetmap.josm.data.Bounds;
+import org.openstreetmap.josm.data.gpx.GpxData;
+import org.openstreetmap.josm.data.gpx.IGpxTrack;
+import org.openstreetmap.josm.gui.MainApplication;
+import org.openstreetmap.josm.gui.MapFrame;
+import org.openstreetmap.josm.io.GpxReader;
 import org.openstreetmap.josm.tools.Logging;
+import org.xml.sax.SAXException;
 
 /**
  * A menu action for opening all GPX tracks crossing the current map view from a
@@ -43,7 +54,10 @@ public class Tracks2MapOpenAction extends JosmAction {
     }
 
     @Override
-    public void actionPerformed(ActionEvent e) {
+    public void actionPerformed(ActionEvent event) {
+        MapFrame mapFrame = MainApplication.getMap();
+        if (mapFrame == null)
+            return;
         if (gpxDirectory == null) {
             Logging.error(
                     "Tracks2Map: You need to define the path of the directory with the GPX tracks in the preferences first");
@@ -63,9 +77,28 @@ public class Tracks2MapOpenAction extends JosmAction {
             return;
         }
 
+        // Determine the bounds of the map view
+        Bounds mapBounds = mapFrame.mapView.getLatLonBounds(mapFrame.mapView.getBounds());
+
+        // List all GPX files
         List<File> gpxFiles = listGPXFiles(gpxDirectory, recursive, null);
-        for (File gpxFile : gpxFiles)
-            Logging.info("Tracks2Map: Found GPX file " + gpxFile.getAbsolutePath());
+        for (File gpxFile : gpxFiles) {
+            try {
+                GpxData gpxData = readGPXFile(gpxFile);
+                Logging.info("Tracks2Map: Read GPX file " + gpxFile.getAbsolutePath());
+                gpxData.storageFile = gpxFile;
+                Collection<IGpxTrack> gpxTracks = gpxData.getTracks();
+                for (IGpxTrack gpxTrack : gpxTracks) {
+                    Bounds trackBounds = gpxTrack.getBounds();
+                    if (mapBounds.intersects(trackBounds))
+                        Logging.info("Tracks2Map: Track in GPX file '" + gpxFile.getAbsolutePath()
+                                + "' intersects map view bounds");
+                }
+
+            } catch (IOException | SAXException e) {
+                Logging.error("Tracks2Map: " + e.toString());
+            }
+        }
     }
 
     /**
@@ -103,6 +136,27 @@ public class Tracks2MapOpenAction extends JosmAction {
             Logging.error("Tracks2Map: " + e.toString());
         }
         return gpxFileList;
+    }
+
+    /**
+     * Reads the GPX data from a GPX file.
+     *
+     * @param gpxFile The GPX file to read.
+     * @return The GPX data read from the file.
+     * @throws IOException  Thrown if an I/O error occurs trying to read the file.
+     * @throws SAXException Thrown if a SAX parsing error occurs.
+     */
+    private static GpxData readGPXFile(File gpxFile) throws IOException, SAXException {
+        InputStream inputStream = null;
+        try {
+            inputStream = new FileInputStream(gpxFile);
+            GpxReader gpxReader = new GpxReader(inputStream);
+            gpxReader.parse(false);
+            return gpxReader.getGpxData();
+        } finally {
+            if (inputStream != null)
+                inputStream.close();
+        }
     }
 
 }
