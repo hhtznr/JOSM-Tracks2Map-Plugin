@@ -16,6 +16,8 @@ import org.openstreetmap.josm.actions.JosmAction;
 import org.openstreetmap.josm.data.Bounds;
 import org.openstreetmap.josm.data.gpx.GpxData;
 import org.openstreetmap.josm.data.gpx.IGpxTrack;
+import org.openstreetmap.josm.data.gpx.IGpxTrackSegment;
+import org.openstreetmap.josm.data.gpx.WayPoint;
 import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapFrame;
 import org.openstreetmap.josm.io.GpxReader;
@@ -89,8 +91,7 @@ public class Tracks2MapOpenAction extends JosmAction {
                 gpxData.storageFile = gpxFile;
                 Collection<IGpxTrack> gpxTracks = gpxData.getTracks();
                 for (IGpxTrack gpxTrack : gpxTracks) {
-                    Bounds trackBounds = gpxTrack.getBounds();
-                    if (mapBounds.intersects(trackBounds))
+                    if (trackIntersectsBounds(gpxTrack, mapBounds))
                         Logging.info("Tracks2Map: Track in GPX file '" + gpxFile.getAbsolutePath()
                                 + "' intersects map view bounds");
                 }
@@ -159,4 +160,33 @@ public class Tracks2MapOpenAction extends JosmAction {
         }
     }
 
+    /**
+     * Checks if a GPX track intersects given bounds.
+     *
+     * @param gpxTrack The GPX track for which to perform the intersection check.
+     * @param bounds   The (map) bounds for which to perform the intersection check.
+     * @return {@code true} if the track runs through the bounds (or at least one of
+     *         the way points touches them), {@code false} otherwise.
+     */
+    private static boolean trackIntersectsBounds(IGpxTrack gpxTrack, Bounds bounds) {
+        // If the overall track bounds do not intersect the given bounds, there is
+        // nothing left to check
+        if (!bounds.intersects(gpxTrack.getBounds()))
+            return false;
+        // Otherwise check if the bounds of one of the track segments intersect the
+        // given bounds
+        for (IGpxTrackSegment segment : gpxTrack.getSegments()) {
+            if (bounds.intersects(segment.getBounds())) {
+                // If the bounds of the track segment intersect the given bounds, check if the
+                // given bounds contain one of its way points
+                // (It is still possible that the track segment goes around the given bounds but
+                // does not intersect it)
+                for (WayPoint wayPoint : segment.getWayPoints()) {
+                    if (bounds.contains(wayPoint.getCoor()))
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
 }
