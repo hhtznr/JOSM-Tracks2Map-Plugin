@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import org.openstreetmap.josm.actions.JosmAction;
@@ -13,7 +14,11 @@ import org.openstreetmap.josm.data.gpx.GpxData;
 import org.openstreetmap.josm.data.gpx.IGpxTrack;
 import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MapFrame;
+import org.openstreetmap.josm.gui.MapView;
+import org.openstreetmap.josm.gui.PleaseWaitRunnable;
 import org.openstreetmap.josm.gui.io.importexport.GpxImporter;
+import org.openstreetmap.josm.gui.progress.ProgressMonitor;
+import org.openstreetmap.josm.io.OsmTransferException;
 import org.openstreetmap.josm.tools.Logging;
 import org.xml.sax.SAXException;
 
@@ -74,38 +79,86 @@ public class Tracks2MapOpenAction extends JosmAction {
             return;
         }
 
-        // Determine the bounds of the map view
-        Bounds mapBounds = mapFrame.mapView.getLatLonBounds(mapFrame.mapView.getBounds());
+        OpenGPXTracksTask task = new OpenGPXTracksTask(gpxDirectory, recursive, mapFrame.mapView);
+        MainApplication.worker.submit(task);
+    }
 
-        // List for collecting GPX data with tracks that run through the map view
-        ArrayList<GpxData> gpxTracksIntersectingMap = new ArrayList<>();
+    public static class OpenGPXTracksTask extends PleaseWaitRunnable {
 
-        // List all GPX files
-        List<File> gpxFiles = GPXUtils.listGPXFiles(gpxDirectory, recursive, null);
-        for (File gpxFile : gpxFiles) {
-            try {
-                GpxData gpxData = GPXUtils.readGPXFile(gpxFile);
-                Logging.info("Tracks2Map: Read GPX file " + gpxFile.getAbsolutePath());
-                gpxData.storageFile = gpxFile;
-                Collection<IGpxTrack> gpxTracks = gpxData.getTracks();
-                for (IGpxTrack gpxTrack : gpxTracks) {
-                    if (GPXUtils.trackIntersectsBounds(gpxTrack, mapBounds)) {
-                        Logging.info("Tracks2Map: Track in GPX file '" + gpxFile.getAbsolutePath()
-                                + "' intersects map view bounds");
-                        // In case of intersection, collect the GPX data and continue with the next one
-                        gpxTracksIntersectingMap.add(gpxData);
-                        continue;
-                    }
-                }
-            } catch (IOException | SAXException e) {
-                Logging.error("Tracks2Map: " + e.toString());
-            }
+        private final File gpxDirectory;
+        private final boolean recursive;
+        private final MapView mapView;
+        private boolean canceled = false;
+
+        public OpenGPXTracksTask(File gpxDirectory, boolean recursive, MapView mapView) {
+            super("Opening all GPX tracks in map view");
+            this.gpxDirectory = gpxDirectory;
+            this.recursive = recursive;
+            this.mapView = mapView;
         }
 
-        // Open the collected GPX data in new layers (as JOSM does it if the user conventionally opens GPX files)
-        for (GpxData gpxData : gpxTracksIntersectingMap)
-            GpxImporter.addLayers(GpxImporter.loadLayers(gpxData, true, gpxData.storageFile.getName()));
-        // Zoom the map view back to the previous bounds
-        mapFrame.mapView.zoomTo(mapBounds);
+        @Override
+        protected void cancel() {
+            canceled = true;
+        }
+
+        @Override
+        protected void realRun() throws SAXException, IOException, OsmTransferException {
+            // Determine the bounds of the map view
+            Bounds mapBounds = mapView.getLatLonBounds(mapView.getBounds());
+
+            // List for collecting GPX data with tracks that run through the map view
+            ArrayList<GpxData> gpxTracksIntersectingMap = new ArrayList<>();
+
+            // List all GPX files and sort them by their absolute path
+            List<File> gpxFiles = GPXUtils.listGPXFiles(gpxDirectory, recursive, null);
+            Collections.sort(gpxFiles, (File file1, File file2) -> {
+                return file1.getAbsolutePath().compareTo(file2.getAbsolutePath());
+            });
+            // Setup a JOSM progress monitor for this task
+            ProgressMonitor progressMonitor = getProgressMonitor();
+            progressMonitor.setTicksCount(gpxFiles.size());
+            for (File gpxFile : gpxFiles) {
+                if (canceled)
+                    return;
+                String gpxFilePath = gpxFile.getAbsolutePath();
+                getProgressMonitor().setCustomText(gpxFilePath);
+                try {
+                    GpxData gpxData = GPXUtils.readGPXFile(gpxFile);
+                    Logging.info("Tracks2Map: Read GPX file " + gpxFilePath);
+                    gpxData.storageFile = gpxFile;
+                    Collection<IGpxTrack> gpxTracks = gpxData.getTracks();
+                    for (IGpxTrack gpxTrack : gpxTracks) {
+                        if (GPXUtils.trackIntersectsBounds(gpxTrack, mapBounds)) {
+                            Logging.info(
+                                    "Tracks2Map: Track in GPX file '" + gpxFilePath + "' intersects map view bounds");
+                            // In case of intersection, collect the GPX data and continue with the next one
+                            gpxTracksIntersectingMap.add(gpxData);
+                            progressMonitor.setExtraText(" (found: " + gpxTracksIntersectingMap.size() + ")");
+                            continue;
+                        }
+                    }
+                } catch (IOException | SAXException e) {
+                    Logging.error("Tracks2Map: " + e.toString());
+                }
+                progressMonitor.worked(1);
+            }
+
+            // Open the collected GPX data in new layers (as JOSM does it if the user
+            // conventionally opens GPX files)
+            for (GpxData gpxData : gpxTracksIntersectingMap) {
+                if (canceled)
+                    break;
+                GpxImporter.addLayers(GpxImporter.loadLayers(gpxData, true, gpxData.storageFile.getName()));
+            }
+
+            // Zoom the map view back to the previous bounds
+            mapView.zoomTo(mapBounds);
+        }
+
+        @Override
+        protected void finish() {
+        }
+
     }
 }
