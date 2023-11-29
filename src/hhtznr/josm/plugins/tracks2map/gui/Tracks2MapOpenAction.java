@@ -19,6 +19,7 @@ import org.openstreetmap.josm.gui.MapFrame;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.PleaseWaitRunnable;
 import org.openstreetmap.josm.gui.io.importexport.GpxImporter;
+import org.openstreetmap.josm.gui.layer.GpxLayer;
 import org.openstreetmap.josm.gui.progress.ProgressMonitor;
 import org.openstreetmap.josm.io.OsmTransferException;
 import org.openstreetmap.josm.tools.Logging;
@@ -184,12 +185,30 @@ public class Tracks2MapOpenAction extends JosmAction {
             // Exchange the previous cache against the new cache
             Tracks2MapOpenAction.fileInfoCache = fileInfoCacheNew;
 
+            // List existing GPX layers
+            List<GpxLayer> existingGpxLayers = MainApplication.getLayerManager().getLayersOfType(GpxLayer.class);
+
             // Open the collected GPX data in new layers (as JOSM does it if the user
             // conventionally opens GPX files)
             for (GpxData gpxData : gpxTracksIntersectingMap) {
                 if (canceled)
                     break;
-                GpxImporter.addLayers(GpxImporter.loadLayers(gpxData, true, gpxData.storageFile.getName()));
+                String layerName = gpxData.storageFile.getName();
+                boolean addLayer = true;
+                // Check if a GPX layer by the same name already exists
+                for (GpxLayer layer : existingGpxLayers) {
+                    if (layer.getName().equals(layerName)) {
+                        Logging.info("Tracks2Map: Will not add a new GPX layer for GPX file '"
+                                + gpxData.storageFile.getAbsolutePath()
+                                + "'. GPX layer for this file name already exists.");
+                        addLayer = false;
+                        break;
+                    }
+                }
+                // Add a new GPX layer if no GPX layer with the same name exists
+                // (omit adding the same layer multiple times upon repeated execution)
+                if (addLayer)
+                    GpxImporter.addLayers(GpxImporter.loadLayers(gpxData, true, layerName));
             }
 
             // Zoom the map view back to the previous bounds
