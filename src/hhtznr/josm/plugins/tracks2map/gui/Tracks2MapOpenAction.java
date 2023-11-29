@@ -6,7 +6,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.RejectedExecutionException;
 
 import org.openstreetmap.josm.actions.JosmAction;
 import org.openstreetmap.josm.data.Bounds;
@@ -36,6 +38,8 @@ public class Tracks2MapOpenAction extends JosmAction {
 
     private File gpxDirectory = null;
     private boolean recursive = true;
+
+    private static HashMap<String, GPXFileInfo> fileInfoCache = new HashMap<>();
 
     public Tracks2MapOpenAction() {
         super("Open all GPX tracks in map view", "tracks2map.svg",
@@ -80,7 +84,11 @@ public class Tracks2MapOpenAction extends JosmAction {
         }
 
         OpenGPXTracksTask task = new OpenGPXTracksTask(gpxDirectory, recursive, mapFrame.mapView);
-        MainApplication.worker.submit(task);
+        try {
+            MainApplication.worker.submit(task);
+        } catch (RejectedExecutionException e) {
+            Logging.error("Tracks2Map: Execution of GPX file open task rejected: " + e.toString());
+        }
     }
 
     public static class OpenGPXTracksTask extends PleaseWaitRunnable {
@@ -118,31 +126,63 @@ public class Tracks2MapOpenAction extends JosmAction {
             // Setup a JOSM progress monitor for this task
             ProgressMonitor progressMonitor = getProgressMonitor();
             progressMonitor.setTicksCount(gpxFiles.size());
+
+            HashMap<String, GPXFileInfo> fileInfoCacheNew = new HashMap<>();
             for (File gpxFile : gpxFiles) {
                 if (canceled)
                     return;
                 String gpxFilePath = gpxFile.getAbsolutePath();
                 getProgressMonitor().setCustomText(gpxFilePath);
-                try {
-                    GpxData gpxData = GPXUtils.readGPXFile(gpxFile);
-                    Logging.info("Tracks2Map: Read GPX file " + gpxFilePath);
-                    gpxData.storageFile = gpxFile;
-                    Collection<IGpxTrack> gpxTracks = gpxData.getTracks();
-                    for (IGpxTrack gpxTrack : gpxTracks) {
-                        if (GPXUtils.trackIntersectsBounds(gpxTrack, mapBounds)) {
-                            Logging.info(
-                                    "Tracks2Map: Track in GPX file '" + gpxFilePath + "' intersects map view bounds");
-                            // In case of intersection, collect the GPX data and continue with the next one
-                            gpxTracksIntersectingMap.add(gpxData);
-                            progressMonitor.setExtraText(" (found: " + gpxTracksIntersectingMap.size() + ")");
-                            continue;
+
+                GPXFileInfo fileInfo = Tracks2MapOpenAction.fileInfoCache.get(gpxFilePath);
+                long gpxFileLastModified = gpxFile.lastModified();
+                // GPX file not known yet, known and modified or known and intersects map view
+                if (fileInfo == null || fileInfo.lastModified < gpxFileLastModified
+                        || mapBounds.intersects(fileInfo.bounds)) {
+                    try {
+                        // Read the GPX data from the file
+                        GpxData gpxData = GPXUtils.readGPXFile(gpxFile);
+                        Logging.info("Tracks2Map: Read GPX file " + gpxFilePath);
+                        gpxData.storageFile = gpxFile;
+                        Collection<IGpxTrack> gpxTracks = gpxData.getTracks();
+                        Bounds overallTrackBounds = null;
+                        for (IGpxTrack gpxTrack : gpxTracks) {
+                            // Establish overall bounds of the tracks in the file
+                            Bounds trackBounds = gpxTrack.getBounds();
+                            if (overallTrackBounds == null)
+                                overallTrackBounds = trackBounds;
+                            else
+                                overallTrackBounds.extend(trackBounds);
+
+                            // If the overall track bounds do not intersect the given bounds, there is
+                            // nothing left to check
+                            if (!mapBounds.intersects(trackBounds))
+                                continue;
+                            if (GPXUtils.trackIntersectsBounds(gpxTrack, mapBounds)) {
+                                Logging.info("Tracks2Map: Track in GPX file '" + gpxFilePath
+                                        + "' intersects map view bounds");
+                                // In case of intersection, collect the GPX data and continue with the next one
+                                gpxTracksIntersectingMap.add(gpxData);
+                                progressMonitor
+                                        .setExtraText(" (found tracks: " + gpxTracksIntersectingMap.size() + ")");
+                            }
                         }
+                        // Remember the information on the GPX file
+                        fileInfoCacheNew.put(gpxFilePath, new GPXFileInfo(gpxFileLastModified, overallTrackBounds));
+                    } catch (IOException | SAXException e) {
+                        Logging.error("Tracks2Map: " + e.toString());
                     }
-                } catch (IOException | SAXException e) {
-                    Logging.error("Tracks2Map: " + e.toString());
                 }
+                // GPX file already known, unmodified and does not intersect map view
+                else {
+                    fileInfoCacheNew.put(gpxFilePath, fileInfo);
+                }
+                // Increase progress by one tick
                 progressMonitor.worked(1);
             }
+
+            // Exchange the previous cache against the new cache
+            Tracks2MapOpenAction.fileInfoCache = fileInfoCacheNew;
 
             // Open the collected GPX data in new layers (as JOSM does it if the user
             // conventionally opens GPX files)
@@ -159,6 +199,19 @@ public class Tracks2MapOpenAction extends JosmAction {
         @Override
         protected void finish() {
         }
+    }
 
+    /**
+     * Helper class for remembering modification time and overall bounds of GPX
+     * files.
+     */
+    private static class GPXFileInfo {
+        public long lastModified;
+        public Bounds bounds;
+
+        public GPXFileInfo(long lastModified, Bounds bounds) {
+            this.lastModified = lastModified;
+            this.bounds = bounds;
+        }
     }
 }
