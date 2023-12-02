@@ -11,6 +11,7 @@ import org.openstreetmap.josm.plugins.PluginInformation;
 import org.openstreetmap.josm.spi.preferences.Config;
 import org.openstreetmap.josm.spi.preferences.IPreferences;
 
+import hhtznr.josm.plugins.tracks2map.gui.Tracks2MapDeleteAllGPXLayersAction;
 import hhtznr.josm.plugins.tracks2map.gui.Tracks2MapOpenAction;
 import hhtznr.josm.plugins.tracks2map.gui.Tracks2MapTabPreferenceSetting;
 
@@ -22,6 +23,7 @@ import hhtznr.josm.plugins.tracks2map.gui.Tracks2MapTabPreferenceSetting;
 public class Tracks2MapPlugin extends Plugin {
 
     private final Tracks2MapOpenAction openAction;
+    private final Tracks2MapDeleteAllGPXLayersAction deleteAllLayersAction;
 
     private Tracks2MapTabPreferenceSetting preferenceSetting = null;
 
@@ -31,7 +33,10 @@ public class Tracks2MapPlugin extends Plugin {
         openAction = new Tracks2MapOpenAction();
         openAction.setEnabled(false);
         setGPXDirectoryFromPreferences();
-        MainMenu.addWithCheckbox(MainApplication.getMenu().fileMenu, openAction, MainMenu.WINDOW_MENU_GROUP.ALWAYS);
+        deleteAllLayersAction = new Tracks2MapDeleteAllGPXLayersAction();
+        deleteAllLayersAction.setEnabled(false);
+        MainMenu.add(MainApplication.getMenu().fileMenu, openAction, MainMenu.WINDOW_MENU_GROUP.ALWAYS);
+        MainMenu.add(MainApplication.getMenu().fileMenu, deleteAllLayersAction, MainMenu.WINDOW_MENU_GROUP.ALWAYS);
     }
 
     /**
@@ -58,6 +63,7 @@ public class Tracks2MapPlugin extends Plugin {
     @Override
     public void mapFrameInitialized(MapFrame oldFrame, MapFrame newFrame) {
         openAction.setEnabled(newFrame != null);
+        deleteAllLayersAction.setEnabled(newFrame != null);
     }
 
     /**
