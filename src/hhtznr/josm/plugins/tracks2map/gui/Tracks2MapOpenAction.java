@@ -19,7 +19,9 @@ import org.openstreetmap.josm.gui.MapFrame;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.PleaseWaitRunnable;
 import org.openstreetmap.josm.gui.io.importexport.GpxImporter;
+import org.openstreetmap.josm.gui.io.importexport.GpxImporter.GpxImporterData;
 import org.openstreetmap.josm.gui.layer.GpxLayer;
+import org.openstreetmap.josm.gui.layer.MainLayerManager;
 import org.openstreetmap.josm.gui.progress.ProgressMonitor;
 import org.openstreetmap.josm.io.OsmTransferException;
 import org.openstreetmap.josm.tools.Logging;
@@ -186,7 +188,8 @@ public class Tracks2MapOpenAction extends JosmAction {
             Tracks2MapOpenAction.fileInfoCache = fileInfoCacheNew;
 
             // List existing GPX layers
-            List<GpxLayer> existingGpxLayers = MainApplication.getLayerManager().getLayersOfType(GpxLayer.class);
+            MainLayerManager layerManager = MainApplication.getLayerManager();
+            List<GpxLayer> existingGpxLayers = layerManager.getLayersOfType(GpxLayer.class);
 
             // Open the collected GPX data in new layers (as JOSM does it if the user
             // conventionally opens GPX files)
@@ -207,12 +210,15 @@ public class Tracks2MapOpenAction extends JosmAction {
                 }
                 // Add a new GPX layer if no GPX layer with the same name exists
                 // (omit adding the same layer multiple times upon repeated execution)
-                if (addLayer)
-                    GpxImporter.addLayers(GpxImporter.loadLayers(gpxData, true, layerName));
+                if (addLayer) {
+                    GpxImporterData data = GpxImporter.loadLayers(gpxData, true, layerName);
+                    if (data.getMarkerLayer() != null)
+                        layerManager.addLayer(data.getMarkerLayer(), false);
+                    if (data.getGpxLayer() != null) {
+                        layerManager.addLayer(data.getGpxLayer(), false);
+                    }
+                }
             }
-
-            // Zoom the map view back to the previous bounds
-            mapView.zoomTo(mapBounds);
         }
 
         @Override
