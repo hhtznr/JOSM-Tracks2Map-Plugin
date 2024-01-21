@@ -1,4 +1,4 @@
-# JOSM-Tracks2Map-Plugin
+# JOSM Tracks2Map Plugin
 **Tracks2Map** is a plugin for the [OpenStreetMap](https://www.openstreetmap.org/) editor [JOSM](https://josm.openstreetmap.de/). It opens all GPX tracks in the current map view from a specified directory. Optionally, it can work recursively on subdirectories. Only those tracks, are opened that actually cross the map view. If available, associated markers are opened as well.
 
 As the plugin may open a number of GPX track layers and GPX marker layers at a time, it also provides a menu option for deleting all GPX layers at a time.
