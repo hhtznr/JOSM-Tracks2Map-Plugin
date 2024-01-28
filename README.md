@@ -21,4 +21,4 @@ As the plugin may open a number of GPX track layers and GPX marker layers at a t
 3. Select the directory with your recorded or gathered GPX tracks via the file chooser dialog and check the `Recursive` option as needed.
 4. Click the `OK` button at the bottom.
 
-For further information and screenshots visit the <a href="https://github.com/hhtznr/JOSM-Elevation-Plugin/wiki">project wiki</a>.
+For further information and screenshots visit the [project wiki](https://github.com/hhtznr/JOSM-Tracks2Map-Plugin/wiki) or the [Track2Map plugin page on the OpenStreetMap wiki](https://wiki.openstreetmap.org/wiki/JOSM/Plugins/Tracks2Map).
