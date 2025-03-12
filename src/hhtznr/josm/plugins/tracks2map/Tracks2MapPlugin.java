@@ -10,7 +10,6 @@ import org.openstreetmap.josm.plugins.Plugin;
 import org.openstreetmap.josm.plugins.PluginInformation;
 import org.openstreetmap.josm.spi.preferences.Config;
 import org.openstreetmap.josm.spi.preferences.IPreferences;
-import org.openstreetmap.josm.tools.Utils;
 
 import hhtznr.josm.plugins.tracks2map.gui.Tracks2MapDeleteAllGPXLayersAction;
 import hhtznr.josm.plugins.tracks2map.gui.Tracks2MapOpenAction;
@@ -49,7 +48,7 @@ public class Tracks2MapPlugin extends Plugin {
                 Tracks2MapPreferences.DEFAULT_GPX_DIRECTORY);
         boolean recursive = pref.getBoolean(Tracks2MapPreferences.RECURSIVE, true);
         File gpxDirectory;
-        if (Utils.isBlank(gpxDirectoryName))
+        if (gpxDirectoryName.isBlank())
             gpxDirectory = null;
         else
             gpxDirectory = new File(gpxDirectoryName);
