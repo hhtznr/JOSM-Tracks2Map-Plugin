@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -88,6 +89,29 @@ public class GPXUtils {
             if (inputStream != null)
                 inputStream.close();
         }
+    }
+
+    /**
+     * Determines the overall bounds of all tracks in a given GPX data.
+     *
+     * @param gpxData The GPX data.
+     * @return The overall bounds of all tracks contained in the GPX data.
+     * throws IOException If the GPX data does not contain GPX tracks.
+     */
+    public static Bounds getTrackBounds(GpxData gpxData) throws IOException {
+        if (gpxData.getTrackCount() == 0)
+            throw new IOException("GPX Data " + gpxData.toString() + " does not contain GPX tracks");
+        Collection<IGpxTrack> gpxTracks = gpxData.getTracks();
+        Bounds overallTrackBounds = null;
+        for (IGpxTrack gpxTrack : gpxTracks) {
+            // Establish overall bounds of the tracks in the file
+            Bounds trackBounds = gpxTrack.getBounds();
+            if (overallTrackBounds == null)
+                overallTrackBounds = trackBounds;
+            else
+                overallTrackBounds.extend(trackBounds);
+        }
+        return overallTrackBounds;
     }
 
     /**
