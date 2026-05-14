@@ -2,7 +2,9 @@ package hhtznr.josm.plugins.tracks2map.gui;
 
 import java.awt.event.ActionEvent;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -12,6 +14,7 @@ import java.util.concurrent.RejectedExecutionException;
 
 import org.openstreetmap.josm.actions.JosmAction;
 import org.openstreetmap.josm.data.Bounds;
+import org.openstreetmap.josm.data.Preferences;
 import org.openstreetmap.josm.data.gpx.GpxData;
 import org.openstreetmap.josm.data.gpx.IGpxTrack;
 import org.openstreetmap.josm.gui.MainApplication;
@@ -27,6 +30,8 @@ import org.openstreetmap.josm.io.OsmTransferException;
 import org.openstreetmap.josm.tools.Logging;
 import org.xml.sax.SAXException;
 
+import hhtznr.josm.plugins.tracks2map.data.TrackCacheEntry;
+import hhtznr.josm.plugins.tracks2map.data.TrackCacheManager;
 import hhtznr.josm.plugins.tracks2map.utils.GPXUtils;
 
 /**
@@ -42,12 +47,28 @@ public class Tracks2MapOpenAction extends JosmAction {
     private File gpxDirectory = null;
     private boolean recursive = true;
 
-    private static HashMap<String, GPXFileInfo> fileInfoCache = new HashMap<>();
+    private final TrackCacheManager cacheManager;
 
+    /**
+     * Creates a new Tracks2Map open action.
+     */
     public Tracks2MapOpenAction() {
         super("Open all GPX tracks in map view", "tracks2map.svg",
                 "Open all GPX tracks from the directory defined in the preferences which cross the current map view",
                 null, true, "tracks2map-open", false);
+        File cacheFile = new File(Preferences.main().getDirs().getCacheDirectory(true), "Tracks2Map.json");
+        cacheManager = new TrackCacheManager(cacheFile.toPath());
+    }
+
+    /**
+     * Returns the track cache manager used for caching the bounds of previously
+     * processed GPX tracks as well as saving them to disk and loading them from
+     * disk
+     *
+     * @return The track cache manager.
+     */
+    public TrackCacheManager getTrackCacheManager() {
+        return cacheManager;
     }
 
     /**
@@ -94,7 +115,7 @@ public class Tracks2MapOpenAction extends JosmAction {
         }
     }
 
-    public static class OpenGPXTracksTask extends PleaseWaitRunnable {
+    private class OpenGPXTracksTask extends PleaseWaitRunnable {
 
         private final File gpxDirectory;
         private final boolean recursive;
@@ -115,6 +136,21 @@ public class Tracks2MapOpenAction extends JosmAction {
 
         @Override
         protected void realRun() throws SAXException, IOException, OsmTransferException {
+            // Get the cached bounds of GPX tracks that were previously processed
+            HashMap<String, TrackCacheEntry> fileInfoCacheOld = Tracks2MapOpenAction.this.cacheManager
+                    .getCacheEntries();
+            // Try to load the saved cached bounds from a previous session, if no cache
+            // entries are in memory
+            if (fileInfoCacheOld.isEmpty()) {
+                try {
+                    cacheManager.loadCache();
+                } catch (FileNotFoundException e) {
+                    Logging.info("Tracks2Map: Could not load cached GPX tracks because cache file '"
+                            + cacheManager.getCacheFilePath().toString() + "' does not exist");
+                }
+                fileInfoCacheOld = Tracks2MapOpenAction.this.cacheManager.getCacheEntries();
+            }
+
             // Determine the bounds of the map view
             Bounds mapBounds = mapView.getLatLonBounds(mapView.getBounds());
 
@@ -130,18 +166,18 @@ public class Tracks2MapOpenAction extends JosmAction {
             ProgressMonitor progressMonitor = getProgressMonitor();
             progressMonitor.setTicksCount(gpxFiles.size());
 
-            HashMap<String, GPXFileInfo> fileInfoCacheNew = new HashMap<>();
+            HashMap<String, TrackCacheEntry> fileInfoCacheNew = new HashMap<>();
             for (File gpxFile : gpxFiles) {
                 if (canceled)
                     return;
                 String gpxFilePath = gpxFile.getAbsolutePath();
                 getProgressMonitor().setCustomText(gpxFilePath);
 
-                GPXFileInfo fileInfo = Tracks2MapOpenAction.fileInfoCache.get(gpxFilePath);
-                long gpxFileLastModified = gpxFile.lastModified();
+                TrackCacheEntry cacheEntry = fileInfoCacheOld.get(gpxFilePath);
+                Instant gpxFileLastModified = Instant.ofEpochMilli(gpxFile.lastModified());
                 // GPX file not known yet, known and modified or known and intersects map view
-                if (fileInfo == null || fileInfo.lastModified < gpxFileLastModified
-                        || mapBounds.intersects(fileInfo.bounds)) {
+                if (cacheEntry == null || cacheEntry.getLastModified().isBefore(gpxFileLastModified)
+                        || mapBounds.intersects(cacheEntry.getBounds())) {
                     try {
                         // Read the GPX data from the file
                         GpxData gpxData = GPXUtils.readGPXFile(gpxFile);
@@ -171,21 +207,22 @@ public class Tracks2MapOpenAction extends JosmAction {
                             }
                         }
                         // Remember the information on the GPX file
-                        fileInfoCacheNew.put(gpxFilePath, new GPXFileInfo(gpxFileLastModified, overallTrackBounds));
+                        fileInfoCacheNew.put(gpxFilePath,
+                                new TrackCacheEntry(gpxFilePath, gpxFileLastModified, overallTrackBounds));
                     } catch (IOException | SAXException e) {
                         Logging.error("Tracks2Map: " + e.toString());
                     }
                 }
                 // GPX file already known, unmodified and does not intersect map view
                 else {
-                    fileInfoCacheNew.put(gpxFilePath, fileInfo);
+                    fileInfoCacheNew.put(gpxFilePath, cacheEntry);
                 }
                 // Increase progress by one tick
                 progressMonitor.worked(1);
             }
 
             // Exchange the previous cache against the new cache
-            Tracks2MapOpenAction.fileInfoCache = fileInfoCacheNew;
+            Tracks2MapOpenAction.this.cacheManager.setCacheEntries(fileInfoCacheNew);
 
             // List existing GPX layers
             MainLayerManager layerManager = MainApplication.getLayerManager();
@@ -223,20 +260,6 @@ public class Tracks2MapOpenAction extends JosmAction {
 
         @Override
         protected void finish() {
-        }
-    }
-
-    /**
-     * Helper class for remembering modification time and overall bounds of GPX
-     * files.
-     */
-    private static class GPXFileInfo {
-        public long lastModified;
-        public Bounds bounds;
-
-        public GPXFileInfo(long lastModified, Bounds bounds) {
-            this.lastModified = lastModified;
-            this.bounds = bounds;
         }
     }
 }

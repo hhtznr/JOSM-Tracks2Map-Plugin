@@ -1,6 +1,7 @@
 package hhtznr.josm.plugins.tracks2map;
 
 import java.io.File;
+import java.io.IOException;
 
 import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MainMenu;
@@ -27,6 +28,11 @@ public class Tracks2MapPlugin extends Plugin {
 
     private Tracks2MapTabPreferenceSetting preferenceSetting = null;
 
+    /**
+     * Initialized the plugin.
+     *
+     * @param info context information about the plugin.
+     */
     public Tracks2MapPlugin(PluginInformation info) {
         super(info);
 
@@ -37,6 +43,19 @@ public class Tracks2MapPlugin extends Plugin {
         deleteAllLayersAction.setEnabled(false);
         MainMenu.add(MainApplication.getMenu().fileMenu, openAction, MainMenu.WINDOW_MENU_GROUP.ALWAYS);
         MainMenu.add(MainApplication.getMenu().fileMenu, deleteAllLayersAction, MainMenu.WINDOW_MENU_GROUP.ALWAYS);
+        // Register a shutdown thread that will save the cache with the track bounds to
+        // file
+        Runtime.getRuntime().addShutdownHook(new Thread("tracks2map-shutdown") {
+            @Override
+            public void run() {
+                try {
+                    openAction.getTrackCacheManager().saveCache();
+                } catch (IOException e) {
+                    System.err.println("Tracks2Map: Could not save the cached GPX track bounds to '"
+                            + openAction.getTrackCacheManager().getCacheFilePath().toString() + "'");
+                }
+            }
+        });
     }
 
     /**
