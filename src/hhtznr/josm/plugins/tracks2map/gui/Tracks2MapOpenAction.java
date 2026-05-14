@@ -180,7 +180,7 @@ public class Tracks2MapOpenAction extends JosmAction {
                         || mapBounds.intersects(cacheEntry.getBounds())) {
                     try {
                         // Read the GPX data from the file
-                        GpxData gpxData = GPXUtils.readGPXFile(gpxFile);
+                        GpxData gpxData = GPXUtils.readGPXFile(gpxFile.toPath());
                         Logging.info("Tracks2Map: Read GPX file " + gpxFilePath);
                         Collection<IGpxTrack> gpxTracks = gpxData.getTracks();
                         Bounds overallTrackBounds = null;

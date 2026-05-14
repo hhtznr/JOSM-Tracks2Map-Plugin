@@ -1,9 +1,10 @@
 package hhtznr.josm.plugins.tracks2map.utils;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -23,7 +24,7 @@ import org.xml.sax.SAXException;
 /**
  * This class provides static utility methods for work with GPX files and GPX
  * data.
- *s
+ *
  * @author Harald Hetzner
  */
 public class GPXUtils {
@@ -71,23 +72,20 @@ public class GPXUtils {
     /**
      * Reads the GPX data from a GPX file.
      *
-     * @param gpxFile The GPX file to read.
+     * @param gpxFilePath The path of the GPX file to read.
      * @return The GPX data read from the file.
      * @throws IOException  Thrown if an I/O error occurs trying to read the file.
      * @throws SAXException Thrown if a SAX parsing error occurs.
      */
-    public static GpxData readGPXFile(File gpxFile) throws IOException, SAXException {
-        InputStream inputStream = null;
-        try {
-            inputStream = new FileInputStream(gpxFile);
+    public static GpxData readGPXFile(Path gpxFilePath) throws IOException, SAXException {
+        try (InputStream inputStream = Files.newInputStream(gpxFilePath)) {
             GpxReader gpxReader = new GpxReader(inputStream);
             gpxReader.parse(false);
+
             GpxData gpxData = gpxReader.getGpxData();
-            gpxData.storageFile = gpxFile;
+            gpxData.storageFile = gpxFilePath.toFile();
+
             return gpxData;
-        } finally {
-            if (inputStream != null)
-                inputStream.close();
         }
     }
 
@@ -95,8 +93,8 @@ public class GPXUtils {
      * Determines the overall bounds of all tracks in a given GPX data.
      *
      * @param gpxData The GPX data.
-     * @return The overall bounds of all tracks contained in the GPX data.
-     * throws IOException If the GPX data does not contain GPX tracks.
+     * @return The overall bounds of all tracks contained in the GPX data. throws
+     *         IOException If the GPX data does not contain GPX tracks.
      */
     public static Bounds getTrackBounds(GpxData gpxData) throws IOException {
         if (gpxData.getTrackCount() == 0)
