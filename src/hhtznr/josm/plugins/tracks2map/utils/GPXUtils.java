@@ -81,7 +81,9 @@ public class GPXUtils {
             inputStream = new FileInputStream(gpxFile);
             GpxReader gpxReader = new GpxReader(inputStream);
             gpxReader.parse(false);
-            return gpxReader.getGpxData();
+            GpxData gpxData = gpxReader.getGpxData();
+            gpxData.storageFile = gpxFile;
+            return gpxData;
         } finally {
             if (inputStream != null)
                 inputStream.close();

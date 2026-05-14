@@ -182,7 +182,6 @@ public class Tracks2MapOpenAction extends JosmAction {
                         // Read the GPX data from the file
                         GpxData gpxData = GPXUtils.readGPXFile(gpxFile);
                         Logging.info("Tracks2Map: Read GPX file " + gpxFilePath);
-                        gpxData.storageFile = gpxFile;
                         Collection<IGpxTrack> gpxTracks = gpxData.getTracks();
                         Bounds overallTrackBounds = null;
                         for (IGpxTrack gpxTrack : gpxTracks) {
