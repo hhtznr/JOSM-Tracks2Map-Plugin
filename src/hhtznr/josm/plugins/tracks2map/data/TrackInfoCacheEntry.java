@@ -10,20 +10,20 @@ import org.openstreetmap.josm.data.Bounds;
  *
  * @author Harald Hetzner
  */
-public class TrackCacheEntry {
+public class TrackInfoCacheEntry {
 
     private String gpxFilePath;
     private Instant lastModified;
     private Bounds bounds;
 
     /**
-     * Creates a new track cache entry.
+     * Creates a new track info cache entry.
      *
      * @param gpxFilePath  The path of the GPX file.
      * @param lastModified The modification time of the GPX file.
      * @param bounds       The bounds of the GPX track.
      */
-    public TrackCacheEntry(String gpxFilePath, Instant lastModified, Bounds bounds) {
+    public TrackInfoCacheEntry(String gpxFilePath, Instant lastModified, Bounds bounds) {
         this.gpxFilePath = gpxFilePath;
         this.lastModified = lastModified;
         this.bounds = bounds;

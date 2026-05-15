@@ -2,7 +2,9 @@ package hhtznr.josm.plugins.tracks2map;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 
+import org.openstreetmap.josm.data.Preferences;
 import org.openstreetmap.josm.gui.MainApplication;
 import org.openstreetmap.josm.gui.MainMenu;
 import org.openstreetmap.josm.gui.MapFrame;
@@ -12,8 +14,10 @@ import org.openstreetmap.josm.plugins.PluginInformation;
 import org.openstreetmap.josm.spi.preferences.Config;
 import org.openstreetmap.josm.spi.preferences.IPreferences;
 
+import hhtznr.josm.plugins.tracks2map.data.TrackInfoCacheManager;
 import hhtznr.josm.plugins.tracks2map.gui.Tracks2MapDeleteAllGPXLayersAction;
 import hhtznr.josm.plugins.tracks2map.gui.Tracks2MapOpenAction;
+import hhtznr.josm.plugins.tracks2map.gui.Tracks2MapSyncCacheFromDiskAction;
 import hhtznr.josm.plugins.tracks2map.gui.Tracks2MapTabPreferenceSetting;
 
 /**
@@ -24,24 +28,33 @@ import hhtznr.josm.plugins.tracks2map.gui.Tracks2MapTabPreferenceSetting;
 public class Tracks2MapPlugin extends Plugin {
 
     private final Tracks2MapOpenAction openAction;
+    private final Tracks2MapSyncCacheFromDiskAction syncAction;
     private final Tracks2MapDeleteAllGPXLayersAction deleteAllLayersAction;
+
+    private final TrackInfoCacheManager cacheManager;
 
     private Tracks2MapTabPreferenceSetting preferenceSetting = null;
 
     /**
-     * Initialized the plugin.
+     * Initializes the plugin.
      *
      * @param info context information about the plugin.
      */
     public Tracks2MapPlugin(PluginInformation info) {
         super(info);
 
-        openAction = new Tracks2MapOpenAction();
-        openAction.setEnabled(false);
+        File cacheFile = new File(Preferences.main().getDirs().getCacheDirectory(true), "Tracks2Map.json");
+        cacheManager = new TrackInfoCacheManager(cacheFile.toPath());
         setGPXDirectoryFromPreferences();
+
+        openAction = new Tracks2MapOpenAction(cacheManager);
+        openAction.setEnabled(false);
+        syncAction = new Tracks2MapSyncCacheFromDiskAction(cacheManager);
+        syncAction.setEnabled(true);
         deleteAllLayersAction = new Tracks2MapDeleteAllGPXLayersAction();
         deleteAllLayersAction.setEnabled(false);
         MainMenu.add(MainApplication.getMenu().fileMenu, openAction, MainMenu.WINDOW_MENU_GROUP.ALWAYS);
+        MainMenu.add(MainApplication.getMenu().fileMenu, syncAction, MainMenu.WINDOW_MENU_GROUP.ALWAYS);
         MainMenu.add(MainApplication.getMenu().fileMenu, deleteAllLayersAction, MainMenu.WINDOW_MENU_GROUP.ALWAYS);
         // Register a shutdown thread that will save the cache with the track bounds to
         // file
@@ -49,13 +62,24 @@ public class Tracks2MapPlugin extends Plugin {
             @Override
             public void run() {
                 try {
-                    openAction.getTrackCacheManager().saveCache();
+                    cacheManager.saveCache();
                 } catch (IOException e) {
                     System.err.println("Tracks2Map: Could not save the cached GPX track bounds to '"
-                            + openAction.getTrackCacheManager().getCacheFilePath().toString() + "'");
+                            + cacheManager.getCacheFilePath().toString() + "'");
                 }
             }
         });
+    }
+
+    /**
+     * Returns the track cache manager used for caching the bounds of previously
+     * processed GPX tracks as well as saving them to disk and loading them from
+     * disk
+     *
+     * @return The track cache manager.
+     */
+    public TrackInfoCacheManager getTrackCacheManager() {
+        return cacheManager;
     }
 
     /**
@@ -66,12 +90,12 @@ public class Tracks2MapPlugin extends Plugin {
         String gpxDirectoryName = pref.get(Tracks2MapPreferences.GPX_DIRECTORY,
                 Tracks2MapPreferences.DEFAULT_GPX_DIRECTORY);
         boolean recursive = pref.getBoolean(Tracks2MapPreferences.RECURSIVE, true);
-        File gpxDirectory;
+        Path gpxDirectory;
         if (gpxDirectoryName.isBlank())
             gpxDirectory = null;
         else
-            gpxDirectory = new File(gpxDirectoryName);
-        openAction.setGPXDirectory(gpxDirectory, recursive);
+            gpxDirectory = Path.of(gpxDirectoryName);
+        cacheManager.setGPXDirectory(gpxDirectory, recursive);
     }
 
     /**

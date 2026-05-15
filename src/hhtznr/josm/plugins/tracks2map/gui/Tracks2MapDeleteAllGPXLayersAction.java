@@ -20,7 +20,7 @@ public class Tracks2MapDeleteAllGPXLayersAction extends JosmAction {
     private static final long serialVersionUID = 1L;
 
     public Tracks2MapDeleteAllGPXLayersAction() {
-        super("Delete all GPX track and marker layers", "delete-all-gpx.svg", "Delete all GPX track and GPX marker layers at once", null,
+        super("Tracks2Map: Delete all GPX track and marker layers", "delete-all-gpx.svg", "Delete all GPX track and GPX marker layers at once", null,
                 true, "tracks2map-delete-all-gpx-layers", false);
     }
 
